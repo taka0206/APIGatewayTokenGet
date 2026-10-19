@@ -153,6 +153,17 @@ check_eq "--keep 2 でトークンファイルが 2 世代" 2 "$(find "$OUT" -ty
 check_eq "--keep 2 でメタデータファイルが 2 世代" 2 "$(find "$OUT" -type f -name 'cognito_token_2*.meta.json' | wc -l)"
 check "latest リンクが有効" test -f "$OUT/cognito_token_latest.token"
 
+OUT="$WORK/keep_order"
+mkdir -p "$OUT"
+for stem in cognito_token_20000101_000000 cognito_token_20000101_000000_2 cognito_token_20000101_000000_10; do
+  printf 'dummy' >"$OUT/$stem.token"
+  printf '{}' >"$OUT/$stem.meta.json"
+done
+run "${COMMON[@]}" -q --keep 2 -o "$OUT"
+check_eq "--keep は連番 _10 を _2 より新しい世代として扱う" \
+  "cognito_token_20000101_000000_10.meta.json $(basename "$(cat "$WORK/stdout")" .token).meta.json" \
+  "$(find "$OUT" -type f -name '*.meta.json' -printf '%f\n' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+
 echo "== シークレットの指定方法 / URL のパス補完"
 OUT="$WORK/secret"
 printf '%s\r\n' "$CLIENT_SECRET" >"$WORK/secret.txt"

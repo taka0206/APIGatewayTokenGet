@@ -698,23 +698,33 @@ check_claims() {
 
 # 出力ファイル名を決定する。トークンとメタデータは同じベース名 (stem) を共有する。
 decide_file_names() {
-  local stem ts n=2 ext exists
+  local stem ts f rest seq max_seq=0
 
   if [[ $USE_TIMESTAMP == true ]]; then
     ts=$(date -d "@$ACQUIRED_AT" '+%Y%m%d_%H%M%S')
-    stem="${NAME}_${ts}"
-    # 同一秒に複数回実行された場合は連番を付与して既存ファイルを上書きしない
-    while true; do
-      exists=false
-      for ext in meta.json token properties csv; do
-        if [[ -e $OUTPUT_DIR/$stem.$ext || -L $OUTPUT_DIR/$stem.$ext ]]; then
-          exists=true
-        fi
-      done
-      [[ $exists == true ]] || break
-      stem="${NAME}_${ts}_${n}"
-      n=$((n + 1))
+    # 同一秒に複数回実行された場合は、その秒の既存ファイルの最大連番 + 1 を付与する
+    # (連番なしを 1 番目とみなす)。--keep で削除された番号を再利用すると
+    # 世代の並び順が崩れるため、空いている番号は使わない。
+    for f in "$OUTPUT_DIR/${NAME}_${ts}"*; do
+      [[ -e $f || -L $f ]] || continue
+      rest=${f##*/}
+      rest=${rest#"${NAME}_${ts}"}
+      if [[ $rest =~ ^_([0-9]+)\. ]]; then
+        seq=$((10#${BASH_REMATCH[1]}))
+      elif [[ $rest == .* ]]; then
+        seq=1
+      else
+        continue
+      fi
+      if ((seq > max_seq)); then
+        max_seq=$seq
+      fi
     done
+    if ((max_seq == 0)); then
+      stem="${NAME}_${ts}"
+    else
+      stem="${NAME}_${ts}_$((max_seq + 1))"
+    fi
     LATEST_TOKEN_PATH="$OUTPUT_DIR/${NAME}_latest.${TOKEN_EXT}"
     LATEST_META_PATH="$OUTPUT_DIR/${NAME}_latest.meta.json"
   else
@@ -922,8 +932,8 @@ prune_old_generations() {
   count=${#stems[@]}
   ((count > KEEP)) || return 0
 
-  # ファイル名のタイムスタンプ順 (ロケールに依存しないバイト順) に並べ替える
-  mapfile -d '' -t sorted < <(printf '%s\0' "${stems[@]}" | LC_ALL=C sort -z)
+  # ファイル名のタイムスタンプ・連番の順に並べ替える (連番 _10 が _9 より後になるようバージョン順で比較)
+  mapfile -d '' -t sorted < <(printf '%s\0' "${stems[@]}" | LC_ALL=C sort -z -V)
 
   for ((i = 0; i < count - KEEP; i++)); do
     stem=${sorted[i]}
