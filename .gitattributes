@@ -1,0 +1,3 @@
+# RHEL 上で実行するため、シェルスクリプトは常に LF 改行とする
+*.sh text eol=lf
+*.py text eol=lf

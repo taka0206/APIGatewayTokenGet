@@ -1,0 +1,6 @@
+# 取得したアクセストークンとメタデータ (認証情報のためコミットしない)
+*.token
+*.meta.json
+*.properties
+*.csv
+tokens/
